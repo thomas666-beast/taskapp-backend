@@ -177,4 +177,15 @@ describe('tasks', () => {
     const res = await app.inject({ method: 'GET', url: '/tasks' })
     assert.equal(res.statusCode, 401)
   })
+
+  test('rejects whitespace-only title', async () => {
+    const { alice, bob } = await setup()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/tasks',
+      headers: auth(alice.token),
+      payload: { workerId: bob.id, title: '   ' },
+    })
+    assert.equal(res.statusCode, 400)
+  })
 })

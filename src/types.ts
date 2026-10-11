@@ -23,3 +23,17 @@ export type Task = {
   updatedAt: Date
   closedAt: Date | null
 }
+
+export type MessageType = 'TEXT' | 'IMAGE' | 'AUDIO' | 'FILE'
+
+export type Message = {
+  id: string
+  taskId: string
+  senderId: string
+  type: MessageType
+  text: string | null
+  fileUrl: string | null
+  fileName: string | null
+  fileSize: number | null
+  createdAt: Date
+}
