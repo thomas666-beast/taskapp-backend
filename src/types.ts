@@ -6,3 +6,20 @@ export type PublicWorker = {
   description: string
   createdAt: Date
 }
+
+export type TaskStatus = 'OPEN' | 'WORKER_CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+
+export type Task = {
+  id: string
+  userId: string
+  workerId: string
+  title: string
+  status: TaskStatus
+  rating: number | null
+  workerConfirmedAt: Date | null
+  userConfirmedAt: Date | null
+  autoConfirmAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  closedAt: Date | null
+}
