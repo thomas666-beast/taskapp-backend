@@ -37,3 +37,13 @@ export type Message = {
   fileSize: number | null
   createdAt: Date
 }
+
+export type WorkerStats = {
+  total: number
+  open: number
+  workerConfirmed: number
+  completed: number
+  cancelled: number
+  rated: number
+  averageRating: number | null
+}
