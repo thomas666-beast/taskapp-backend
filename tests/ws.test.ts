@@ -188,4 +188,40 @@ describe('websocket', () => {
     assert.equal(evt.type, 'task:updated')
     assert.equal(evt.task.status, 'WORKER_CONFIRMED')
   })
+
+  test('rating broadcasts task:updated', async () => {
+    const alice = await registerUser(app, 'alice', 'USER')
+    const bob = await registerUser(app, 'bob', 'WORKER')
+    const createRes = await app.inject({
+      method: 'POST', url: '/tasks', headers: auth(alice.token),
+      payload: { workerId: bob.id, title: 'Rate broadcast' },
+    })
+    const taskId = createRes.json().task.id
+
+    // Complete the task first
+    await app.inject({
+      method: 'POST', url: `/tasks/${taskId}/worker-confirm`,
+      headers: auth(bob.token),
+    })
+    await app.inject({
+      method: 'POST', url: `/tasks/${taskId}/user-confirm`,
+      headers: auth(alice.token),
+    })
+
+    const bobC = connect(bob.token)
+    await bobC.waitOpen()
+    await bobC.next() // ready
+    bobC.ws.send(JSON.stringify({ type: 'task:join', taskId }))
+    await bobC.next() // joined
+
+    await app.inject({
+      method: 'POST', url: `/tasks/${taskId}/rate`,
+      headers: auth(alice.token),
+      payload: { rating: 5 },
+    })
+
+    const evt = await bobC.next()
+    assert.equal(evt.type, 'task:updated')
+    assert.equal(evt.task.rating, 5)
+  })
 })

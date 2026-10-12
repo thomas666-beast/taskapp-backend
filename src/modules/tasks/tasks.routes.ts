@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { createTaskSchema } from './tasks.schemas.js'
 import type { Task } from '../../types.js'
 import { broadcastToTask } from '../../ws/server.js'
+import { rateTaskSchema } from './rate.schema.js'
 
 const TASK_COLUMNS = `
   id,
@@ -180,6 +181,52 @@ app.post(
       )
 
       const result = updated.rows[0]
+      broadcastToTask(app, taskId, { type: 'task:updated', task: result })
+
+      return reply.send({ task: result })
+    }
+  )
+
+  // ── User rates a completed task ───────────────────────
+  app.post(
+    '/tasks/:id/rate',
+    { preHandler: [app.requireRole('USER')] },
+    async (req, reply) => {
+      const { id: taskId } = req.params as { id: string }
+      const userId = req.user.sub
+
+      const parsed = rateTaskSchema.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Invalid body', details: parsed.error.flatten() })
+      }
+
+      const { rows } = await app.db.query<Task>(
+        `SELECT ${TASK_COLUMNS} FROM tasks WHERE id = $1`,
+        [taskId]
+      )
+      const task = rows[0]
+      if (!task) return reply.code(404).send({ error: 'Task not found' })
+
+      if (task.userId !== userId) {
+        return reply.code(403).send({ error: 'Only the task creator can rate' })
+      }
+      if (task.status !== 'COMPLETED') {
+        return reply.code(409).send({ error: 'Can only rate completed tasks' })
+      }
+      if (task.rating !== null) {
+        return reply.code(409).send({ error: 'Task already rated' })
+      }
+
+      const { rows: updated } = await app.db.query<Task>(
+        `UPDATE tasks
+          SET rating = $1,
+              updated_at = now()
+        WHERE id = $2
+        RETURNING ${TASK_COLUMNS}`,
+        [parsed.data.rating, taskId]
+      )
+
+      const result = updated[0]
       broadcastToTask(app, taskId, { type: 'task:updated', task: result })
 
       return reply.send({ task: result })
