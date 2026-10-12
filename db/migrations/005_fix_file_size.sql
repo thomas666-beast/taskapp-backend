@@ -1,0 +1,1 @@
+ALTER TABLE messages ALTER COLUMN file_size TYPE INTEGER;

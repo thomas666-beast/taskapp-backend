@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import { createMessageSchema } from './messages.schemas.js'
 import { loadTaskForParticipant } from '../tasks/tasks.access.js'
+import { broadcastToTask } from '../../ws/server.js'
 import type { Message } from '../../types.js'
 
 export default async function messagesRoutes(app: FastifyInstance) {
-  // ── Add a message to a task ───────────────────────────
   app.post(
     '/tasks/:id/messages',
     { preHandler: [app.authenticate] },
@@ -26,12 +26,12 @@ export default async function messagesRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: 'Task is cancelled, chat is locked' })
       }
 
-      const { text } = parsed.data
       const { sub: senderId } = req.user
+      const data = parsed.data
 
       const { rows } = await app.db.query<Message>(
-        `INSERT INTO messages (task_id, sender_id, type, text)
-         VALUES ($1, $2, 'TEXT', $3)
+        `INSERT INTO messages (task_id, sender_id, type, text, file_url, file_name, file_size)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id,
                    task_id   AS "taskId",
                    sender_id AS "senderId",
@@ -40,17 +40,26 @@ export default async function messagesRoutes(app: FastifyInstance) {
                    file_name AS "fileName",
                    file_size AS "fileSize",
                    created_at AS "createdAt"`,
-        [taskId, senderId, text]
+        [
+          taskId,
+          senderId,
+          data.type,
+          data.type === 'TEXT' ? data.text : null,
+          data.type === 'TEXT' ? null : data.fileUrl,
+          data.type === 'TEXT' ? null : data.fileName,
+          data.type === 'TEXT' ? null : data.fileSize,
+        ]
       )
 
       const message = rows[0]
-      // WebSocket broadcast goes here in Step 6
+
+      // ⬇⬇⬇ THIS IS THE LINE THAT WAS PROBABLY MISSING ⬇⬇⬇
+      broadcastToTask(app, taskId, { type: 'message:new', message })
 
       return reply.code(201).send({ message })
     }
   )
 
-  // ── List all messages for a task ──────────────────────
   app.get(
     '/tasks/:id/messages',
     { preHandler: [app.authenticate] },
