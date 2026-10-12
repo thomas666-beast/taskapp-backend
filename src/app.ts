@@ -15,6 +15,7 @@ import uploadsRoutes from './modules/uploads/uploads.routes.js'
 import wsRoutes from './ws/server.js'
 import { startAutoConfirmJob } from './jobs/autoConfirm.js'
 import workerStatsRoutes from './modules/workers/stats.routes.js'
+import adminRoutes from './modules/admin/admin.routes.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -49,7 +50,8 @@ export async function buildApp() {
   await app.register(uploadsRoutes)
   await app.register(wsRoutes)
   await app.register(workerStatsRoutes)
-  
+  await app.register(adminRoutes)
+ 
   app.decorate('autoConfirmTick', autoConfirmTick)
 
   app.get('/health', async () => ({ ok: true, service: 'taskapp' }))

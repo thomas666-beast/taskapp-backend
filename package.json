@@ -14,7 +14,8 @@
     "migrate": "node --env-file=.env scripts/migrate.js",
     "migrate:test": "node --env-file=.env.test scripts/migrate.js",
     "test": "npm run migrate:test && node --env-file=.env.test --test --test-force-exit --import tsx 'tests/**/*.test.ts'",
-    "test:watch": "node --env-file=.env.test --test --watch --import tsx 'tests/**/*.test.ts'"
+    "test:watch": "node --env-file=.env.test --test --watch --import tsx 'tests/**/*.test.ts'",
+    "seed:admin": "node --env-file=.env scripts/seed-admin.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.1",
