@@ -163,4 +163,29 @@ describe('websocket', () => {
     const evt = await carolC.next()
     assert.equal(evt.type, 'error')
   })
+
+  test('worker-confirm broadcasts task:updated', async () => {
+    const alice = await registerUser(app, 'alice', 'USER')
+    const bob = await registerUser(app, 'bob', 'WORKER')
+    const createRes = await app.inject({
+      method: 'POST', url: '/tasks', headers: auth(alice.token),
+      payload: { workerId: bob.id, title: 'Broadcast test' },
+    })
+    const taskId = createRes.json().task.id
+
+    const aliceC = connect(alice.token)
+    await aliceC.waitOpen()
+    await aliceC.next() // ready
+    aliceC.ws.send(JSON.stringify({ type: 'task:join', taskId }))
+    await aliceC.next() // joined
+
+    await app.inject({
+      method: 'POST', url: `/tasks/${taskId}/worker-confirm`,
+      headers: auth(bob.token),
+    })
+
+    const evt = await aliceC.next()
+    assert.equal(evt.type, 'task:updated')
+    assert.equal(evt.task.status, 'WORKER_CONFIRMED')
+  })
 })

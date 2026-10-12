@@ -13,9 +13,18 @@ import tasksRoutes from './modules/tasks/tasks.routes.js'
 import messagesRoutes from './modules/messages/messages.routes.js'
 import uploadsRoutes from './modules/uploads/uploads.routes.js'
 import wsRoutes from './ws/server.js'
+import { startAutoConfirmJob } from './jobs/autoConfirm.js'
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    autoConfirmTick: () => Promise<void>
+  }
+}
 
 export async function buildApp() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' })
+
+  const { tick: autoConfirmTick } = startAutoConfirmJob(app)
 
   await app.register(cors, { origin: true })
 
@@ -38,6 +47,7 @@ export async function buildApp() {
   await app.register(messagesRoutes)
   await app.register(uploadsRoutes)
   await app.register(wsRoutes)
+  app.decorate('autoConfirmTick', autoConfirmTick)
 
   app.get('/health', async () => ({ ok: true, service: 'taskapp' }))
 

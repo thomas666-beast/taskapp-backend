@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { createTaskSchema } from './tasks.schemas.js'
 import type { Task } from '../../types.js'
+import { broadcastToTask } from '../../ws/server.js'
 
 const TASK_COLUMNS = `
   id,
@@ -102,6 +103,86 @@ export default async function tasksRoutes(app: FastifyInstance) {
       }
 
       return reply.send({ task })
+    }
+  )
+
+  // ── Worker confirms task is done ──────────────────────
+app.post(
+  '/tasks/:id/worker-confirm',
+  { preHandler: [app.authenticate] },
+  async (req, reply) => {
+    const { id: taskId } = req.params as { id: string }
+    const userId = req.user.sub
+
+    const { rows } = await app.db.query<Task>(
+      `SELECT ${TASK_COLUMNS} FROM tasks WHERE id = $1`,
+      [taskId]
+    )
+    const task = rows[0]
+    if (!task) return reply.code(404).send({ error: 'Task not found' })
+
+    if (task.workerId !== userId) {
+      return reply.code(403).send({ error: 'Only the assigned worker can confirm' })
+    }
+    if (task.status !== 'OPEN') {
+      return reply.code(409).send({ error: `Cannot confirm from status ${task.status}` })
+    }
+
+    const updated = await app.db.query<Task>(
+      `UPDATE tasks
+         SET status = 'WORKER_CONFIRMED',
+             worker_confirmed_at = now(),
+             auto_confirm_at = now() + interval '1 hour',
+             updated_at = now()
+       WHERE id = $1
+       RETURNING ${TASK_COLUMNS}`,
+      [taskId]
+    )
+
+    const result = updated.rows[0]
+    broadcastToTask(app, taskId, { type: 'task:updated', task: result })
+
+    return reply.send({ task: result })
+  }
+)
+
+  // ── User confirms and closes the task ─────────────────
+  app.post(
+    '/tasks/:id/user-confirm',
+    { preHandler: [app.authenticate] },
+    async (req, reply) => {
+      const { id: taskId } = req.params as { id: string }
+      const userId = req.user.sub
+
+      const { rows } = await app.db.query<Task>(
+        `SELECT ${TASK_COLUMNS} FROM tasks WHERE id = $1`,
+        [taskId]
+      )
+      const task = rows[0]
+      if (!task) return reply.code(404).send({ error: 'Task not found' })
+
+      if (task.userId !== userId) {
+        return reply.code(403).send({ error: 'Only the task creator can confirm' })
+      }
+      if (task.status !== 'WORKER_CONFIRMED') {
+        return reply.code(409).send({ error: `Cannot confirm from status ${task.status}` })
+      }
+
+      const updated = await app.db.query<Task>(
+        `UPDATE tasks
+          SET status = 'COMPLETED',
+              user_confirmed_at = now(),
+              closed_at = now(),
+              updated_at = now()
+        WHERE id = $1
+        RETURNING ${TASK_COLUMNS}`,
+        [taskId]
+      )
+
+      const result = updated.rows[0]
+      broadcastToTask(app, taskId, { type: 'task:updated', task: result })
+
+      return reply.send({ task: result })
     }
   )
 }
